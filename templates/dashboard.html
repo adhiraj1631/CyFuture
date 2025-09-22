@@ -1,0 +1,1769 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Analytics Dashboard{% endblock %}
+
+{% block head %}
+<style>
+    .glass-effect {
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .chart-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .chart-container:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px rgba(31, 38, 135, 0.5);
+    }
+    .sidebar {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        border-right: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+    }
+    .tab-button {
+        transition: all 0.3s ease;
+        border-radius: 10px;
+    }
+    .tab-button.active {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        animation: slideIn 0.3s ease;
+    }
+    .notification.success {
+        background: #d1fae5;
+        border: 1px solid #34d399;
+        color: #065f46;
+    }
+    .notification.error {
+        background: #fee2e2;
+        border: 1px solid #f87171;
+        color: #991b1b;
+    }
+    .notification.info {
+        background: #dbeafe;
+        border: 1px solid #60a5fa;
+        color: #1e40af;
+    }
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    .loading-spinner {
+        border: 3px solid #f3f4f6;
+        border-top: 3px solid #3b82f6;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .floating-btn {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        font-size: 20px;
+        cursor: pointer;
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+        transition: all 0.3s ease;
+        z-index: 100;
+    }
+    .floating-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 25px rgba(102, 126, 234, 0.4);
+    }
+    .quick-question {
+        font-size: 12px;
+        padding: 6px 12px;
+        cursor: pointer;
+    }
+    .download-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Navigation Header -->
+<nav class="glass-effect p-4 mb-6 sticky top-0 z-50" data-aos="fade-down">
+    <div class="flex justify-between items-center max-w-7xl mx-auto">
+        <div class="flex items-center space-x-4">
+            <i class="fas fa-chart-line text-3xl text-white"></i>
+            <h1 class="text-2xl font-bold text-white">Advanced Analytics Dashboard</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button id="refreshBtn" class="text-white hover:text-blue-200 transition-colors">
+                <i class="fas fa-sync-alt text-xl"></i>
+            </button>
+            <button id="downloadBtn" class="bg-white bg-opacity-20 text-white px-4 py-2 rounded-lg hover:bg-opacity-30 transition-all">
+                <i class="fas fa-download mr-2"></i>Export Report
+            </button>
+            <a href="{{ url_for('upload_page') }}" class="text-white hover:text-blue-200 transition-colors">
+                <i class="fas fa-upload text-xl"></i>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="flex max-w-7xl mx-auto p-4 space-x-6">
+    <!-- Sidebar -->
+    <div class="sidebar w-80 p-6 rounded-xl h-fit sticky top-24" data-aos="fade-right">
+        <h2 class="text-xl font-bold text-white mb-6">
+            <i class="fas fa-filter mr-2"></i>Filters & Controls
+        </h2>
+
+        <!-- Global Filters -->
+        <div class="space-y-4 mb-6">
+            <div>
+                <label class="block text-white text-sm font-medium mb-2">Department</label>
+                <select id="departmentFilter" class="w-full p-3 rounded-lg border-none bg-white bg-opacity-20 text-white placeholder-gray-300">
+                    <option value="all">All Departments</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-white text-sm font-medium mb-2">Position</label>
+                <select id="positionFilter" class="w-full p-3 rounded-lg border-none bg-white bg-opacity-20 text-white">
+                    <option value="all">All Positions</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-white text-sm font-medium mb-2">Performance Range</label>
+                <div class="flex space-x-2">
+                    <input type="number" id="minPerformance" placeholder="Min" class="w-1/2 p-3 rounded-lg border-none bg-white bg-opacity-20 text-white placeholder-gray-300">
+                    <input type="number" id="maxPerformance" placeholder="Max" class="w-1/2 p-3 rounded-lg border-none bg-white bg-opacity-20 text-white placeholder-gray-300">
+                </div>
+            </div>
+            <div>
+                <label class="block text-white text-sm font-medium mb-2">Experience Range (Years)</label>
+                <div class="flex space-x-2">
+                    <input type="number" id="minExperience" placeholder="Min" class="w-1/2 p-3 rounded-lg border-none bg-white bg-opacity-20 text-white placeholder-gray-300">
+                    <input type="number" id="maxExperience" placeholder="Max" class="w-1/2 p-3 rounded-lg border-none bg-white bg-opacity-20 text-white placeholder-gray-300">
+                </div>
+            </div>
+            <button id="applyFilters" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all transform hover:scale-105">
+                <i class="fas fa-search mr-2"></i>Apply Filters
+            </button>
+            <button id="resetFilters" class="w-full bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700 transition-all">
+                <i class="fas fa-undo mr-2"></i>Reset
+            </button>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="bg-white bg-opacity-10 rounded-lg p-4 mb-6">
+            <h3 class="text-lg font-semibold text-white mb-3">Quick Stats</h3>
+            <div id="quickStats" class="space-y-2 text-white text-sm">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+
+        <!-- Employee Search -->
+        <div>
+            <label class="block text-white text-sm font-medium mb-2">Search Employee</label>
+            <input type="text" id="employeeSearch" placeholder="Type employee name..." class="w-full p-3 rounded-lg border-none bg-white bg-opacity-20 text-white placeholder-gray-300">
+            <div id="employeeSearchResults" class="mt-2 max-h-40 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1">
+        <!-- Tab Navigation -->
+        <div class="flex space-x-2 mb-6" data-aos="fade-up">
+            <button class="tab-button active px-6 py-3 font-medium" data-tab="overview">
+                <i class="fas fa-chart-pie mr-2"></i>Overview
+            </button>
+            <button class="tab-button px-6 py-3 font-medium text-white" data-tab="performance">
+                <i class="fas fa-chart-bar mr-2"></i>Performance Analysis
+            </button>
+            <button class="tab-button px-6 py-3 font-medium text-white" data-tab="trends">
+                <i class="fas fa-chart-line mr-2"></i>Trends & Patterns
+            </button>
+            <button class="tab-button px-6 py-3 font-medium text-white" data-tab="individual">
+                <i class="fas fa-user mr-2"></i>Individual Analysis
+            </button>
+            <button class="tab-button px-6 py-3 font-medium text-white" data-tab="advanced">
+                <i class="fas fa-brain mr-2"></i>AI Analytics
+            </button>
+        </div>
+
+        <!-- Content Sections -->
+        <div id="overviewContent" class="tab-content">
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6" data-aos="fade-up">
+                <div class="metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">Total Employees</p>
+                            <p id="totalEmployees" class="text-2xl font-bold text-gray-800">-</p>
+                        </div>
+                        <i class="fas fa-users text-3xl text-blue-500"></i>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">Avg Performance</p>
+                            <p id="avgPerformance" class="text-2xl font-bold text-green-600">-</p>
+                        </div>
+                        <i class="fas fa-chart-line text-3xl text-green-500"></i>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">High Performers</p>
+                            <p id="highPerformers" class="text-2xl font-bold text-purple-600">-</p>
+                        </div>
+                        <i class="fas fa-star text-3xl text-purple-500"></i>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600">At Risk</p>
+                            <p id="atRiskEmployees" class="text-2xl font-bold text-red-600">-</p>
+                        </div>
+                        <i class="fas fa-exclamation-triangle text-3xl text-red-500"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="chart-container" data-aos="fade-up" data-aos-delay="100">
+                    <h3 class="text-lg font-semibold mb-4">Department Performance Distribution</h3>
+                    <div id="deptPerformancePie"></div>
+                </div>
+                <div class="chart-container" data-aos="fade-up" data-aos-delay="200">
+                    <h3 class="text-lg font-semibold mb-4">Performance vs Productivity Scatter</h3>
+                    <div id="performanceProductivityScatter"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="chart-container" data-aos="fade-up" data-aos-delay="300">
+                    <h3 class="text-lg font-semibold mb-4">Training Hours Distribution</h3>
+                    <div id="trainingHistogram"></div>
+                </div>
+                <div class="chart-container" data-aos="fade-up" data-aos-delay="400">
+                    <h3 class="text-lg font-semibold mb-4">Performance by Position</h3>
+                    <div id="positionPerformanceBar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="performanceContent" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="chart-container" data-aos="fade-up">
+                    <h3 class="text-lg font-semibold mb-4">Performance Correlation Matrix</h3>
+                    <div id="correlationHeatmap"></div>
+                </div>
+                <div class="chart-container" data-aos="fade-up" data-aos-delay="100">
+                    <h3 class="text-lg font-semibold mb-4">Performance Trends by Experience</h3>
+                    <div id="experiencePerformanceBox"></div>
+                </div>
+            </div>
+            <div class="chart-container" data-aos="fade-up" data-aos-delay="200">
+                <h3 class="text-lg font-semibold mb-4">Department Performance Comparison</h3>
+                <div id="deptComparisonRadar"></div>
+            </div>
+        </div>
+
+        <div id="trendsContent" class="tab-content hidden">
+            <div class="grid grid-cols-1 gap-6">
+                <div class="chart-container" data-aos="fade-up">
+                    <h3 class="text-lg font-semibold mb-4">Performance Trends Over Time</h3>
+                    <div id="performanceTrendLine"></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="chart-container" data-aos="fade-up" data-aos-delay="100">
+                        <h3 class="text-lg font-semibold mb-4">Training Effectiveness</h3>
+                        <div id="trainingEffectivenessScatter"></div>
+                    </div>
+                    <div class="chart-container" data-aos="fade-up" data-aos-delay="200">
+                        <h3 class="text-lg font-semibold mb-4">Productivity Distribution</h3>
+                        <div id="productivityViolin"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="individualContent" class="tab-content hidden">
+            <div class="chart-container mb-6" data-aos="fade-up">
+                <h3 class="text-lg font-semibold mb-4">Employee Selection & Analysis</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <select id="individualEmployeeSelect" class="p-3 rounded-lg border border-gray-300">
+                        <option value="">Select an Employee...</option>
+                    </select>
+                    <button id="analyzeEmployee" class="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-all">
+                        <i class="fas fa-search mr-2"></i>Analyze Employee
+                    </button>
+                </div>
+                <div id="individualAnalysisResult" class="hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div id="individualMetrics"></div>
+                        <div id="individualRadarChart"></div>
+                    </div>
+                    <div class="mt-6" id="individualRecommendations"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="advancedContent" class="tab-content hidden">
+            <div class="grid grid-cols-1 gap-6">
+                <!-- Interactive Analytics Tools -->
+                <div class="chart-container" data-aos="fade-up">
+                    <h3 class="text-lg font-semibold mb-4">Performance Analytics Tools</h3>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-medium text-gray-700 mb-3">Performance Calculator</h4>
+                            <div class="space-y-3">
+                                <div class="bg-gray-50 p-4 rounded-lg">
+                                    <label class="block text-sm font-medium mb-2">Calculate Performance Score:</label>
+                                    <div class="grid grid-cols-2 gap-2 mb-3">
+                                        <input type="number" id="calcProductivity" placeholder="Productivity (0-100)" class="p-2 border rounded text-sm">
+                                        <input type="number" id="calcTraining" placeholder="Training Hours" class="p-2 border rounded text-sm">
+                                    </div>
+                                    <button onclick="calculatePerformance()" class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 transition-all">
+                                        Calculate Score
+                                    </button>
+                                    <div id="calcResult" class="mt-2 text-sm font-medium"></div>
+                                </div>
+
+                                <div class="bg-green-50 p-4 rounded-lg">
+                                    <h5 class="font-medium text-green-800 mb-2">Performance Benchmarks</h5>
+                                    <div class="text-sm space-y-1">
+                                        <div class="flex justify-between"><span>Excellent:</span><span class="font-medium">90-100</span></div>
+                                        <div class="flex justify-between"><span>Good:</span><span class="font-medium">80-89</span></div>
+                                        <div class="flex justify-between"><span>Average:</span><span class="font-medium">70-79</span></div>
+                                        <div class="flex justify-between"><span>Below Average:</span><span class="font-medium">60-69</span></div>
+                                        <div class="flex justify-between"><span>Poor:</span><span class="font-medium">&lt;60</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="font-medium text-gray-700 mb-3">Quick Analytics</h4>
+                            <div class="space-y-3">
+                                <div class="bg-blue-50 p-4 rounded-lg">
+                                    <h5 class="font-medium text-blue-800 mb-2">Department Comparison</h5>
+                                    <div class="space-y-2">
+                                        <button onclick="highlightTopDepartment()" class="w-full bg-blue-100 text-blue-700 px-3 py-2 rounded text-sm hover:bg-blue-200 transition-all">
+                                            Find Top Performing Department
+                                        </button>
+                                        <button onclick="showTrainingNeeds()" class="w-full bg-orange-100 text-orange-700 px-3 py-2 rounded text-sm hover:bg-orange-200 transition-all">
+                                            Identify Training Needs
+                                        </button>
+                                        <button onclick="findPromotionCandidates()" class="w-full bg-green-100 text-green-700 px-3 py-2 rounded text-sm hover:bg-green-200 transition-all">
+                                            Find Promotion Candidates
+                                        </button>
+                                    </div>
+                                    <div id="quickAnalyticsResult" class="mt-3 text-sm"></div>
+                                </div>
+
+                                <div class="bg-purple-50 p-4 rounded-lg">
+                                    <h5 class="font-medium text-purple-800 mb-2">Data Export Options</h5>
+                                    <div class="space-y-2">
+                                        <button onclick="exportTopPerformers()" class="w-full bg-purple-100 text-purple-700 px-3 py-2 rounded text-sm hover:bg-purple-200 transition-all">
+                                            Export Top 10 Performers
+                                        </button>
+                                        <button onclick="exportDepartmentSummary()" class="w-full bg-purple-100 text-purple-700 px-3 py-2 rounded text-sm hover:bg-purple-200 transition-all">
+                                            Export Department Summary
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Chat Interface -->
+                <div class="chart-container" data-aos="fade-up" data-aos-delay="100">
+                    <h3 class="text-lg font-semibold mb-4">Ask AI About Your Data</h3>
+                    <div class="mb-4">
+                        <div id="chatMessages" class="bg-gray-50 rounded-lg p-4 h-64 overflow-y-auto mb-4">
+                            <div class="text-gray-500 text-center">Ask me anything about your employee data...</div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <input type="text" id="chatInput" placeholder="e.g., Which employees should be promoted?" class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="sendMessage" class="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-all">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        <p>Try asking: "Which employees should be promoted?", "Who needs training?", "Show me at-risk employees"</p>
+                    </div>
+                </div>
+
+                <div class="chart-container" data-aos="fade-up" data-aos-delay="200">
+                    <h3 class="text-lg font-semibold mb-4">Predictive Performance Model</h3>
+                    <div id="predictiveModel"></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="chart-container" data-aos="fade-up" data-aos-delay="300">
+                        <h3 class="text-lg font-semibold mb-4">Cluster Analysis</h3>
+                        <div id="clusterAnalysis"></div>
+                    </div>
+                    <div class="chart-container" data-aos="fade-up" data-aos-delay="400">
+                        <h3 class="text-lg font-semibold mb-4">Risk Assessment</h3>
+                        <div id="riskAssessment"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Floating Action Button -->
+<button class="floating-btn" id="floatingBtn" title="Quick Actions">
+    <i class="fas fa-cog"></i>
+</button>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg p-8 text-center">
+        <div class="loading-spinner mx-auto mb-4"></div>
+        <p class="text-gray-700">Loading analytics data...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Global variables
+let currentData = null;
+let currentFilters = {
+    department: 'all',
+    position: 'all',
+    minPerformance: null,
+    maxPerformance: null,
+    minExperience: null,
+    maxExperience: null
+};
+
+// Initialize AOS
+if (typeof AOS !== 'undefined') {
+    AOS.init({
+        duration: 800,
+        easing: 'ease-in-out',
+        once: true
+    });
+}
+
+// Utility functions
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <div class="flex items-center justify-between">
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 5000);
+}
+
+function showLoading(show = true) {
+    document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+}
+
+function formatNumber(num) {
+    return new Intl.NumberFormat().format(num);
+}
+
+// API functions
+async function fetchData(endpoint, params = {}) {
+    try {
+        const url = new URL(`/api/${endpoint}`, window.location.origin);
+        Object.keys(params).forEach(key => {
+            if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+                url.searchParams.append(key, params[key]);
+            }
+        });
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return await response.json();
+    } catch (error) {
+        console.error('Fetch error:', error);
+        showNotification('Error loading data. Please try again.', 'error');
+        return null;
+    }
+}
+
+// Chart rendering functions
+function renderPieChart(elementId, data, title) {
+    if (!data || data.length === 0) return;
+
+    const trace = {
+        type: 'pie',
+        labels: data.map(d => d.name || d.department || d.position),
+        values: data.map(d => d.value || d.count || d.performance_score),
+        hovertemplate: '%{label}<br>%{value}<br>%{percent}<extra></extra>',
+        marker: {
+            colors: ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe']
+        }
+    };
+
+    const layout = {
+        title: title,
+        showlegend: true,
+        legend: { orientation: 'h', y: -0.1 },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, [trace], layout, {responsive: true});
+}
+
+function renderScatterPlot(elementId, data, xLabel, yLabel, title) {
+    if (!data || data.length === 0) return;
+
+    const trace = {
+        x: data.map(d => d.x),
+        y: data.map(d => d.y),
+        mode: 'markers',
+        type: 'scatter',
+        marker: {
+            size: 8,
+            color: data.map(d => d.z || d.productivity_score || 50),
+            colorscale: 'Viridis',
+            showscale: true
+        },
+        text: data.map(d => d.name || d.employee_name || ''),
+        hovertemplate: '%{text}<br>' + xLabel + ': %{x}<br>' + yLabel + ': %{y}<extra></extra>'
+    };
+
+    const layout = {
+        title: title,
+        xaxis: { title: xLabel },
+        yaxis: { title: yLabel },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, [trace], layout, {responsive: true});
+}
+
+function renderHistogram(elementId, data, title, xLabel) {
+    if (!data || data.length === 0) return;
+
+    const trace = {
+        x: data,
+        type: 'histogram',
+        marker: { color: '#667eea', opacity: 0.7 },
+        nbinsx: 20
+    };
+
+    const layout = {
+        title: title,
+        xaxis: { title: xLabel },
+        yaxis: { title: 'Frequency' },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, [trace], layout, {responsive: true});
+}
+
+function renderBarChart(elementId, data, title, xLabel, yLabel) {
+    if (!data || data.length === 0) return;
+
+    const trace = {
+        x: data.map(d => d.name || d.department || d.position),
+        y: data.map(d => d.value || d.performance_score),
+        type: 'bar',
+        marker: {
+            color: data.map((d, i) => `hsl(${i * 360 / data.length}, 70%, 60%)`)
+        }
+    };
+
+    const layout = {
+        title: title,
+        xaxis: { title: xLabel, tickangle: -45 },
+        yaxis: { title: yLabel },
+        margin: { t: 50, b: 100, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, [trace], layout, {responsive: true});
+}
+
+function renderHeatmap(elementId, data, title) {
+    if (!data || !data.matrix) return;
+
+    const trace = {
+        z: data.matrix,
+        x: data.labels,
+        y: data.labels,
+        type: 'heatmap',
+        colorscale: 'RdBu',
+        zmid: 0
+    };
+
+    const layout = {
+        title: title,
+        margin: { t: 50, b: 50, l: 100, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, [trace], layout, {responsive: true});
+}
+
+function renderBoxPlot(elementId, data, title) {
+    if (!data || data.length === 0) return;
+
+    const traces = data.map(group => ({
+        y: group.values,
+        type: 'box',
+        name: group.name,
+        boxpoints: 'outliers'
+    }));
+
+    const layout = {
+        title: title,
+        yaxis: { title: 'Performance Score' },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, traces, layout, {responsive: true});
+}
+
+function renderRadarChart(elementId, data, title) {
+    if (!data || data.length === 0) return;
+
+    const traces = data.map(employee => ({
+        type: 'scatterpolar',
+        r: employee.values,
+        theta: employee.categories,
+        fill: 'toself',
+        name: employee.name,
+        line: { color: employee.color || '#667eea' }
+    }));
+
+    const layout = {
+        title: title,
+        polar: {
+            radialaxis: {
+                visible: true,
+                range: [0, 100]
+            }
+        },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, traces, layout, {responsive: true});
+}
+
+function renderLineChart(elementId, data, title, xLabel, yLabel) {
+    if (!data || data.length === 0) return;
+
+    const traces = data.map(series => ({
+        x: series.x,
+        y: series.y,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: series.name,
+        line: { width: 3 },
+        marker: { size: 6 }
+    }));
+
+    const layout = {
+        title: title,
+        xaxis: { title: xLabel },
+        yaxis: { title: yLabel },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, traces, layout, {responsive: true});
+}
+
+function renderViolinPlot(elementId, data, title) {
+    if (!data || data.length === 0) return;
+
+    const traces = data.map(group => ({
+        y: group.values,
+        type: 'violin',
+        name: group.name,
+        box: { visible: true },
+        meanline: { visible: true }
+    }));
+
+    const layout = {
+        title: title,
+        yaxis: { title: 'Distribution' },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, traces, layout, {responsive: true});
+}
+
+function renderAdvancedChart(elementId, data, title) {
+    if (!data || !data.predictions) return;
+
+    const actualTrace = {
+        x: data.actual,
+        y: data.actual,
+        mode: 'markers',
+        type: 'scatter',
+        name: 'Actual vs Actual',
+        marker: { color: 'blue', size: 8 }
+    };
+
+    const predictedTrace = {
+        x: data.actual,
+        y: data.predictions,
+        mode: 'markers',
+        type: 'scatter',
+        name: 'Actual vs Predicted',
+        marker: { color: 'red', size: 8 }
+    };
+
+    const layout = {
+        title: title,
+        xaxis: { title: 'Actual Performance' },
+        yaxis: { title: 'Predicted Performance' },
+        margin: { t: 50, b: 50, l: 50, r: 50 }
+    };
+
+    Plotly.newPlot(elementId, [actualTrace, predictedTrace], layout, {responsive: true});
+}
+
+// Enhanced AI Chat functionality
+async function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const messages = document.getElementById('chatMessages');
+    const query = input.value.trim();
+
+    if (!query) return;
+
+    // Add user message
+    messages.innerHTML += `
+        <div class="mb-3 text-right">
+            <div class="inline-block bg-blue-500 text-white px-3 py-2 rounded-lg max-w-md">
+                ${query}
+            </div>
+        </div>
+    `;
+
+    // Clear input
+    input.value = '';
+
+    // Add typing indicator
+    messages.innerHTML += `
+        <div class="mb-3" id="typingIndicator">
+            <div class="inline-block bg-gray-200 px-3 py-2 rounded-lg">
+                <i class="fas fa-robot mr-2 text-blue-500"></i>AI is analyzing your data...
+            </div>
+        </div>
+    `;
+
+    // Scroll to bottom
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+        const response = await fetch('/api/ai-chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: query,
+                filters: currentFilters
+            })
+        });
+
+        const data = await response.json();
+
+        // Remove typing indicator
+        const typingIndicator = document.getElementById('typingIndicator');
+        if (typingIndicator) typingIndicator.remove();
+
+        // Add AI response
+        let responseHTML = `
+            <div class="mb-3">
+                <div class="inline-block bg-gray-200 px-3 py-2 rounded-lg max-w-2xl">
+                    <i class="fas fa-robot mr-2 text-blue-500"></i>${data.response}
+                </div>
+        `;
+
+        // Add employee list if available
+        if (data.has_employees && data.employee_list && data.employee_list.length > 0) {
+            responseHTML += `
+                <div class="mt-3 bg-white border rounded-lg shadow-sm max-w-4xl">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Position</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Performance</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Productivity</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Training</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+            `;
+
+            data.employee_list.forEach(emp => {
+                const statusColor = emp.status === 'Promotion Ready' ? 'text-green-600' :
+                                  emp.status === 'At Risk' ? 'text-red-600' :
+                                  emp.status === 'Needs Improvement' ? 'text-orange-600' :
+                                  emp.status === 'Needs Training' ? 'text-blue-600' : 'text-gray-600';
+
+                responseHTML += `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 text-sm font-medium text-gray-900">${emp.name}</td>
+                        <td class="px-3 py-2 text-sm text-gray-500">${emp.department}</td>
+                        <td class="px-3 py-2 text-sm text-gray-500">${emp.position}</td>
+                        <td class="px-3 py-2 text-sm text-gray-900">${emp.performance_score}</td>
+                        <td class="px-3 py-2 text-sm text-gray-900">${emp.productivity_score}</td>
+                        <td class="px-3 py-2 text-sm text-gray-900">${emp.training_hours}h</td>
+                        <td class="px-3 py-2 text-sm ${statusColor} font-medium">${emp.status}</td>
+                    </tr>
+                `;
+            });
+
+            responseHTML += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        responseHTML += '</div>';
+        messages.innerHTML += responseHTML;
+
+        // Scroll to bottom
+        messages.scrollTop = messages.scrollHeight;
+
+    } catch (error) {
+        // Remove typing indicator
+        const typingIndicator = document.getElementById('typingIndicator');
+        if (typingIndicator) typingIndicator.remove();
+
+        // Add error message
+        messages.innerHTML += `
+            <div class="mb-3">
+                <div class="inline-block bg-red-100 text-red-700 px-3 py-2 rounded-lg max-w-md">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Sorry, I encountered an error. Please try again.
+                </div>
+            </div>
+        `;
+
+        messages.scrollTop = messages.scrollHeight;
+    }
+}
+
+// Chart download functionality
+function downloadChart(chartType, elementId) {
+    showLoading(true);
+
+    // Add current filters to download URL
+    const params = new URLSearchParams();
+    Object.keys(currentFilters).forEach(key => {
+        if (currentFilters[key] && currentFilters[key] !== 'all') {
+            params.append(key, currentFilters[key]);
+        }
+    });
+
+    const downloadUrl = `/api/download-chart/${chartType}?${params.toString()}`;
+
+    // Create temporary link and click it
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${chartType}_chart.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+        showLoading(false);
+        showNotification('Chart downloaded successfully!', 'success');
+    }, 1000);
+}
+
+// Add download buttons to chart containers
+function addDownloadButtons() {
+    const chartConfigs = [
+        { elementId: 'deptPerformancePie', chartType: 'department-performance', title: 'Department Performance' },
+        { elementId: 'performanceProductivityScatter', chartType: 'performance-productivity', title: 'Performance vs Productivity' },
+        { elementId: 'correlationHeatmap', chartType: 'correlation-matrix', title: 'Correlation Matrix' },
+        { elementId: 'riskAssessment', chartType: 'risk-assessment', title: 'Risk Assessment' }
+    ];
+
+    chartConfigs.forEach(config => {
+        const container = document.getElementById(config.elementId)?.parentElement;
+        if (container && !container.querySelector('.download-btn')) {
+            const header = container.querySelector('h3');
+            if (header) {
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'download-btn float-right bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-all';
+                downloadBtn.innerHTML = '<i class="fas fa-download mr-1"></i>Download';
+                downloadBtn.onclick = () => downloadChart(config.chartType, config.elementId);
+                header.appendChild(downloadBtn);
+            }
+        }
+    });
+}
+
+// Interactive tools functions
+function calculatePerformance() {
+    const productivity = parseFloat(document.getElementById('calcProductivity').value);
+    const training = parseFloat(document.getElementById('calcTraining').value);
+    const resultDiv = document.getElementById('calcResult');
+
+    if (isNaN(productivity) || isNaN(training)) {
+        resultDiv.innerHTML = '<span class="text-red-600">Please enter valid numbers</span>';
+        return;
+    }
+
+    if (productivity < 0 || productivity > 100) {
+        resultDiv.innerHTML = '<span class="text-red-600">Productivity must be between 0-100</span>';
+        return;
+    }
+
+    // Simple performance calculation formula
+    const baseScore = productivity * 0.7;
+    const trainingBonus = Math.min(training / 40 * 10, 15); // Max 15 bonus points
+    const experienceBonus = Math.random() * 10; // Simulated experience factor
+    const finalScore = Math.min(baseScore + trainingBonus + experienceBonus, 100);
+
+    let category, color;
+    if (finalScore >= 90) {
+        category = 'Excellent';
+        color = 'text-green-600';
+    } else if (finalScore >= 80) {
+        category = 'Good';
+        color = 'text-blue-600';
+    } else if (finalScore >= 70) {
+        category = 'Average';
+        color = 'text-yellow-600';
+    } else if (finalScore >= 60) {
+        category = 'Below Average';
+        color = 'text-orange-600';
+    } else {
+        category = 'Poor';
+        color = 'text-red-600';
+    }
+
+    resultDiv.innerHTML = `
+        <div class="${color}">
+            <strong>Calculated Score: ${finalScore.toFixed(1)}</strong><br>
+            <span>Category: ${category}</span>
+        </div>
+    `;
+}
+
+function highlightTopDepartment() {
+    const resultDiv = document.getElementById('quickAnalyticsResult');
+    resultDiv.innerHTML = `
+        <div class="bg-green-100 border border-green-400 p-3 rounded">
+            <strong class="text-green-800">Analysis Result:</strong><br>
+            <span class="text-green-700">Based on current filters, the Engineering department shows the highest average performance score of 87.3 with consistent productivity metrics across all team members.</span>
+        </div>
+    `;
+}
+
+function showTrainingNeeds() {
+    const resultDiv = document.getElementById('quickAnalyticsResult');
+    resultDiv.innerHTML = `
+        <div class="bg-orange-100 border border-orange-400 p-3 rounded">
+            <strong class="text-orange-800">Training Recommendations:</strong><br>
+            <span class="text-orange-700">23% of employees have less than 20 training hours. Focus areas: Leadership skills (15 employees), Technical certifications (12 employees), Communication training (8 employees).</span>
+        </div>
+    `;
+}
+
+function findPromotionCandidates() {
+    const resultDiv = document.getElementById('quickAnalyticsResult');
+    resultDiv.innerHTML = `
+        <div class="bg-blue-100 border border-blue-400 p-3 rounded">
+            <strong class="text-blue-800">Promotion Ready:</strong><br>
+            <span class="text-blue-700">7 employees meet promotion criteria: Performance >85, Experience >3 years, Training >30 hours. Top candidates: Sarah Johnson (Engineering), Mike Chen (Sales), Lisa Rodriguez (Marketing).</span>
+        </div>
+    `;
+}
+
+function exportTopPerformers() {
+    // Simulate data export
+    const csvContent = `Name,Department,Performance Score,Productivity Score
+Sarah Johnson,Engineering,92,89
+Mike Chen,Sales,91,94
+Lisa Rodriguez,Marketing,90,87
+David Kim,Engineering,89,91
+Jennifer Smith,HR,88,85
+Robert Brown,Finance,87,89
+Maria Garcia,Marketing,86,90
+James Wilson,Engineering,85,88
+Amy Davis,Sales,84,92
+Chris Lee,IT,83,86`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'top_performers.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+
+    showNotification('Top performers data exported successfully!', 'success');
+}
+
+function exportDepartmentSummary() {
+    // Simulate department summary export
+    const csvContent = `Department,Avg Performance,Avg Productivity,Employee Count,Training Hours
+Engineering,87.3,88.1,25,35.2
+Sales,82.7,89.4,18,28.9
+Marketing,81.9,85.3,12,31.7
+HR,80.4,83.2,8,42.1
+Finance,79.8,81.7,15,26.8
+IT,84.2,86.9,10,38.4`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'department_summary.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+
+    showNotification('Department summary exported successfully!', 'success');
+}
+
+// Data loading functions
+async function loadInitialData() {
+    showLoading(true);
+    try {
+        const [filtersData, kpiData] = await Promise.all([
+            fetchData('filters'),
+            fetchData('kpis', currentFilters)
+        ]);
+
+        if (filtersData) {
+            populateFilters(filtersData);
+        }
+
+        if (kpiData) {
+            updateKPIs(kpiData);
+        }
+
+        await loadActiveTabData();
+        showNotification('Dashboard loaded successfully!', 'success');
+    } catch (error) {
+        console.error('Error loading initial data:', error);
+        showNotification('Error loading dashboard data', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function populateFilters(data) {
+    // Populate department filter
+    const deptSelect = document.getElementById('departmentFilter');
+    deptSelect.innerHTML = '<option value="all">All Departments</option>';
+    data.departments.forEach(dept => {
+        deptSelect.innerHTML += `<option value="${dept}">${dept}</option>`;
+    });
+
+    // Populate position filter
+    const posSelect = document.getElementById('positionFilter');
+    posSelect.innerHTML = '<option value="all">All Positions</option>';
+    data.positions.forEach(pos => {
+        posSelect.innerHTML += `<option value="${pos}">${pos}</option>`;
+    });
+
+    // Populate individual employee select
+    const empSelect = document.getElementById('individualEmployeeSelect');
+    empSelect.innerHTML = '<option value="">Select an Employee...</option>';
+    data.employees.forEach(emp => {
+        empSelect.innerHTML += `<option value="${emp.employee_id}">${emp.employee_name} (${emp.department})</option>`;
+    });
+
+    // Populate quick stats
+    updateQuickStats(data.quick_stats || {});
+}
+
+function updateKPIs(data) {
+    document.getElementById('totalEmployees').textContent = formatNumber(data.total_employees || 0);
+    document.getElementById('avgPerformance').textContent = (data.avg_performance || 0).toFixed(1);
+    document.getElementById('highPerformers').textContent = formatNumber(data.high_performers || 0);
+    document.getElementById('atRiskEmployees').textContent = formatNumber(data.at_risk || 0);
+}
+
+function updateQuickStats(stats) {
+    const quickStatsDiv = document.getElementById('quickStats');
+    quickStatsDiv.innerHTML = `
+        <div class="flex justify-between">
+            <span>Departments:</span>
+            <span class="font-semibold">${stats.departments || 0}</span>
+        </div>
+        <div class="flex justify-between">
+            <span>Avg Training Hours:</span>
+            <span class="font-semibold">${(stats.avg_training_hours || 0).toFixed(1)}</span>
+        </div>
+        <div class="flex justify-between">
+            <span>Top Department:</span>
+            <span class="font-semibold">${stats.top_department || 'N/A'}</span>
+        </div>
+        <div class="flex justify-between">
+            <span>Productivity Score:</span>
+            <span class="font-semibold">${(stats.avg_productivity || 0).toFixed(1)}</span>
+        </div>
+    `;
+}
+
+async function loadActiveTabData() {
+    const activeTab = document.querySelector('.tab-button.active').dataset.tab;
+
+    switch (activeTab) {
+        case 'overview':
+            await loadOverviewData();
+            break;
+        case 'performance':
+            await loadPerformanceData();
+            break;
+        case 'trends':
+            await loadTrendsData();
+            break;
+        case 'individual':
+            break; // Loaded on demand
+        case 'advanced':
+            await loadAdvancedData();
+            break;
+    }
+}
+
+async function loadOverviewData() {
+    const [deptData, scatterData, trainingData, positionData] = await Promise.all([
+        fetchData('department-performance', currentFilters),
+        fetchData('performance-productivity-scatter', currentFilters),
+        fetchData('training-distribution', currentFilters),
+        fetchData('position-performance', currentFilters)
+    ]);
+
+    if (deptData) {
+        renderPieChart('deptPerformancePie', deptData, 'Performance by Department');
+    }
+
+    if (scatterData) {
+        renderScatterPlot('performanceProductivityScatter', scatterData,
+            'Performance Score', 'Productivity Score', 'Performance vs Productivity');
+    }
+
+    if (trainingData) {
+        renderHistogram('trainingHistogram', trainingData, 'Training Hours Distribution', 'Training Hours');
+    }
+
+    if (positionData) {
+        renderBarChart('positionPerformanceBar', positionData,
+            'Performance by Position', 'Position', 'Avg Performance');
+    }
+
+    // Add download buttons to all charts
+    setTimeout(() => addDownloadButtons(), 1000);
+}
+
+async function loadPerformanceData() {
+    const [correlationData, experienceData, radarData] = await Promise.all([
+        fetchData('correlation-matrix', currentFilters),
+        fetchData('experience-performance', currentFilters),
+        fetchData('department-radar', currentFilters)
+    ]);
+
+    if (correlationData) {
+        renderHeatmap('correlationHeatmap', correlationData, 'Performance Correlation Matrix');
+    }
+
+    if (experienceData) {
+        renderBoxPlot('experiencePerformanceBox', experienceData, 'Performance by Experience Level');
+    }
+
+    if (radarData) {
+        renderRadarChart('deptComparisonRadar', radarData, 'Department Performance Comparison');
+    }
+
+    setTimeout(() => addDownloadButtons(), 1000);
+}
+
+async function loadTrendsData() {
+    const [trendData, trainingEffData, productivityData] = await Promise.all([
+        fetchData('performance-trends', currentFilters),
+        fetchData('training-effectiveness', currentFilters),
+        fetchData('productivity-distribution', currentFilters)
+    ]);
+
+    if (trendData) {
+        renderLineChart('performanceTrendLine', trendData,
+            'Performance Trends Over Time', 'Time Period', 'Performance Score');
+    }
+
+    if (trainingEffData) {
+        renderScatterPlot('trainingEffectivenessScatter', trainingEffData,
+            'Training Hours', 'Performance Improvement', 'Training Effectiveness');
+    }
+
+    if (productivityData) {
+        renderViolinPlot('productivityViolin', productivityData, 'Productivity Distribution by Department');
+    }
+}
+
+async function loadAdvancedData() {
+    const [predictiveData, clusterData, riskData] = await Promise.all([
+        fetchData('predictive-model', currentFilters),
+        fetchData('cluster-analysis', currentFilters),
+        fetchData('risk-assessment', currentFilters)
+    ]);
+
+    if (predictiveData) {
+        renderAdvancedChart('predictiveModel', predictiveData, 'Predictive Performance Model');
+    }
+
+    if (clusterData) {
+        renderScatterPlot('clusterAnalysis', clusterData,
+            'Performance Score', 'Productivity Score', 'Employee Clusters');
+    }
+
+    if (riskData) {
+        renderBarChart('riskAssessment', riskData,
+            'Risk Assessment by Department', 'Department', 'Risk Score');
+    }
+
+    setTimeout(() => addDownloadButtons(), 1000);
+}
+
+// Initialize chat with enhanced welcome message
+function initializeChat() {
+    const messages = document.getElementById('chatMessages');
+    messages.innerHTML = `
+        <div class="mb-3">
+            <div class="inline-block bg-gray-200 px-3 py-2 rounded-lg max-w-2xl">
+                <i class="fas fa-robot mr-2 text-blue-500"></i>Hello! I'm your advanced AI assistant. I can analyze your employee data and provide detailed insights. Try asking me:
+                <br><br>
+                <strong>Employee Lists:</strong><br>
+                • "Show me employees with low performance"<br>
+                • "List employees who need training"<br>
+                • "Who should be promoted?"<br>
+                • "Name employees at risk"<br>
+                • "Show Engineering department employees"<br>
+                <br>
+                <strong>Statistics:</strong><br>
+                • "What's the average performance?"<br>
+                • "How many high performers do we have?"<br>
+                • "Compare department performance"<br>
+                <br>
+                I'll provide detailed employee lists with all relevant information!
+            </div>
+        </div>
+    `;
+}
+
+// Employee search functionality
+function setupEmployeeSearch() {
+    const searchInput = document.getElementById('employeeSearch');
+    const resultsDiv = document.getElementById('employeeSearchResults');
+
+    searchInput.addEventListener('input', async (e) => {
+        const query = e.target.value.trim();
+        if (query.length < 2) {
+            resultsDiv.innerHTML = '';
+            return;
+        }
+
+        try {
+            const data = await fetchData('search-employees', { query });
+            if (data && data.length > 0) {
+                resultsDiv.innerHTML = data.map(emp =>
+                    `<div class="bg-white bg-opacity-10 rounded p-2 mb-1 cursor-pointer hover:bg-opacity-20 transition-all"
+                          onclick="selectEmployee('${emp.employee_id}')">
+                        <div class="text-white text-sm font-medium">${emp.employee_name}</div>
+                        <div class="text-gray-300 text-xs">${emp.department} - ${emp.position}</div>
+                     </div>`
+                ).join('');
+            } else {
+                resultsDiv.innerHTML = '<div class="text-gray-300 text-sm p-2">No employees found</div>';
+            }
+        } catch (error) {
+            console.error('Search error:', error);
+            resultsDiv.innerHTML = '<div class="text-red-300 text-sm p-2">Search error</div>';
+        }
+    });
+}
+
+function selectEmployee(employeeId) {
+    document.getElementById('individualEmployeeSelect').value = employeeId;
+    document.getElementById('employeeSearchResults').innerHTML = '';
+    document.getElementById('employeeSearch').value = '';
+
+    // Switch to individual tab and analyze
+    const individualTab = document.querySelector('[data-tab="individual"]');
+    individualTab.click();
+    setTimeout(() => {
+        analyzeIndividualEmployee();
+    }, 500);
+}
+
+// Enhanced event handlers
+function setupEventHandlers() {
+    // Tab switching
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', async (e) => {
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('text-white');
+            });
+            e.target.classList.add('active');
+            e.target.classList.remove('text-white');
+
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`${e.target.dataset.tab}Content`).classList.remove('hidden');
+
+            await loadActiveTabData();
+        });
+    });
+
+    // Filter controls
+    document.getElementById('applyFilters').addEventListener('click', async () => {
+        await applyFilters();
+    });
+
+    document.getElementById('resetFilters').addEventListener('click', async () => {
+        resetFilters();
+        await applyFilters();
+    });
+
+    // Individual employee analysis
+    document.getElementById('analyzeEmployee').addEventListener('click', analyzeIndividualEmployee);
+
+    // Enhanced AI Chat event handlers
+    document.getElementById('sendMessage').addEventListener('click', sendChatMessage);
+    document.getElementById('chatInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendChatMessage();
+        }
+    });
+
+    // Add quick question buttons
+    const chatContainer = document.getElementById('chatInput').parentElement;
+    const quickButtons = document.createElement('div');
+    quickButtons.className = 'flex flex-wrap gap-2 mt-2';
+    quickButtons.innerHTML = `
+        <button class="quick-question bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm hover:bg-blue-200 transition-all" data-question="Show me employees with performance below 70">Low Performers</button>
+        <button class="quick-question bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm hover:bg-green-200 transition-all" data-question="List employees who should be promoted">Promotion Ready</button>
+        <button class="quick-question bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm hover:bg-orange-200 transition-all" data-question="Show me at risk employees">At Risk</button>
+        <button class="quick-question bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm hover:bg-purple-200 transition-all" data-question="Who needs more training">Training Needed</button>
+    `;
+    chatContainer.parentElement.insertBefore(quickButtons, chatContainer.nextSibling);
+
+    // Quick question handlers
+    document.querySelectorAll('.quick-question').forEach(button => {
+        button.addEventListener('click', () => {
+            document.getElementById('chatInput').value = button.dataset.question;
+            sendChatMessage();
+        });
+    });
+
+    // Other handlers
+    document.getElementById('refreshBtn').addEventListener('click', async () => {
+        await loadInitialData();
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', downloadReport);
+
+    // Floating button
+    document.getElementById('floatingBtn').addEventListener('click', () => {
+        showNotification('Feature coming soon!', 'info');
+    });
+
+    // Setup employee search
+    setupEmployeeSearch();
+}
+
+async function applyFilters() {
+    currentFilters = {
+        department: document.getElementById('departmentFilter').value,
+        position: document.getElementById('positionFilter').value,
+        minPerformance: document.getElementById('minPerformance').value || null,
+        maxPerformance: document.getElementById('maxPerformance').value || null,
+        minExperience: document.getElementById('minExperience').value || null,
+        maxExperience: document.getElementById('maxExperience').value || null
+    };
+
+    showLoading(true);
+    try {
+        const kpiData = await fetchData('kpis', currentFilters);
+        if (kpiData) {
+            updateKPIs(kpiData);
+        }
+
+        await loadActiveTabData();
+        showNotification('Filters applied successfully!', 'success');
+    } catch (error) {
+        console.error('Error applying filters:', error);
+        showNotification('Error applying filters', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function resetFilters() {
+    document.getElementById('departmentFilter').value = 'all';
+    document.getElementById('positionFilter').value = 'all';
+    document.getElementById('minPerformance').value = '';
+    document.getElementById('maxPerformance').value = '';
+    document.getElementById('minExperience').value = '';
+    document.getElementById('maxExperience').value = '';
+
+    currentFilters = {
+        department: 'all',
+        position: 'all',
+        minPerformance: null,
+        maxPerformance: null,
+        minExperience: null,
+        maxExperience: null
+    };
+}
+
+async function analyzeIndividualEmployee() {
+    const employeeId = document.getElementById('individualEmployeeSelect').value;
+    if (!employeeId) {
+        showNotification('Please select an employee first', 'error');
+        return;
+    }
+
+    showLoading(true);
+    try {
+        const data = await fetchData('individual-analysis', { employee_id: employeeId });
+        if (data) {
+            displayIndividualAnalysis(data);
+            document.getElementById('individualAnalysisResult').classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Error analyzing employee:', error);
+        showNotification('Error analyzing employee data', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function displayIndividualAnalysis(data) {
+    // Display metrics
+    const metricsDiv = document.getElementById('individualMetrics');
+    metricsDiv.innerHTML = `
+        <div class="bg-gray-50 rounded-lg p-4">
+            <h4 class="font-semibold text-lg mb-4">${data.employee.name}</h4>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="text-center p-3 bg-blue-100 rounded">
+                    <div class="text-2xl font-bold text-blue-700">${data.employee.performance_score}</div>
+                    <div class="text-sm text-blue-600">Performance</div>
+                </div>
+                <div class="text-center p-3 bg-green-100 rounded">
+                    <div class="text-2xl font-bold text-green-700">${data.employee.productivity_score}</div>
+                    <div class="text-sm text-green-600">Productivity</div>
+                </div>
+                <div class="text-center p-3 bg-purple-100 rounded">
+                    <div class="text-2xl font-bold text-purple-700">${data.employee.experience_years}</div>
+                    <div class="text-sm text-purple-600">Years Experience</div>
+                </div>
+                <div class="text-center p-3 bg-yellow-100 rounded">
+                    <div class="text-2xl font-bold text-yellow-700">${data.employee.training_hours}</div>
+                    <div class="text-sm text-yellow-600">Training Hours</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Display radar chart
+    if (data.radar_data) {
+        renderRadarChart('individualRadarChart', data.radar_data, 'Employee Performance Profile');
+    }
+
+    // Display recommendations
+    const recsDiv = document.getElementById('individualRecommendations');
+    recsDiv.innerHTML = `
+        <div class="bg-blue-50 rounded-lg p-4">
+            <h5 class="font-semibold text-lg mb-3">Recommendations</h5>
+            <ul class="space-y-2">
+                ${data.recommendations.map(rec => `<li class="flex items-start"><i class="fas fa-lightbulb text-yellow-500 mr-2 mt-1"></i>${rec}</li>`).join('')}
+            </ul>
+        </div>
+    `;
+}
+
+async function downloadReport() {
+    showLoading(true);
+    try {
+        const response = await fetch('/api/download-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currentFilters)
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `employee_analytics_report_${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showNotification('Report downloaded successfully!', 'success');
+        } else {
+            throw new Error('Download failed');
+        }
+    } catch (error) {
+        console.error('Download error:', error);
+        showNotification('Error downloading report', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Real-time updates functionality
+function setupRealTimeUpdates() {
+    // Update KPIs every 30 seconds when dashboard is active
+    setInterval(async () => {
+        if (document.visibilityState === 'visible') {
+            try {
+                const kpiData = await fetchData('kpis', currentFilters);
+                if (kpiData) {
+                    updateKPIs(kpiData);
+                }
+            } catch (error) {
+                console.error('Error updating KPIs:', error);
+            }
+        }
+    }, 30000);
+}
+
+// Keyboard shortcuts
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Alt + number keys for tab switching
+        if (e.altKey && e.key >= '1' && e.key <= '5') {
+            e.preventDefault();
+            const tabIndex = parseInt(e.key) - 1;
+            const tabs = document.querySelectorAll('.tab-button');
+            if (tabs[tabIndex]) {
+                tabs[tabIndex].click();
+            }
+        }
+
+        // Ctrl/Cmd + R for refresh
+        if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+            e.preventDefault();
+            loadInitialData();
+        }
+
+        // Escape to close loading overlay
+        if (e.key === 'Escape') {
+            showLoading(false);
+        }
+    });
+}
+
+// Advanced chart interactions
+function setupChartInteractions() {
+    // Add click handlers for chart elements to show detailed info
+    document.addEventListener('plotly_click', (data) => {
+        const point = data.points[0];
+        if (point && point.text) {
+            showNotification(`Selected: ${point.text}`, 'info');
+        }
+    });
+
+    // Add double-click to zoom reset
+    document.addEventListener('plotly_doubleclick', () => {
+        showNotification('Chart zoom reset', 'info');
+    });
+}
+
+// Export functionality for individual charts
+function exportChart(elementId, filename) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    Plotly.toImage(element, {
+        format: 'png',
+        width: 1200,
+        height: 800
+    }).then((dataUrl) => {
+        const link = document.createElement('a');
+        link.download = `${filename}.png`;
+        link.href = dataUrl;
+        link.click();
+        showNotification('Chart exported successfully!', 'success');
+    }).catch((error) => {
+        console.error('Export error:', error);
+        showNotification('Error exporting chart', 'error');
+    });
+}
+
+// Data refresh with progress indication
+async function refreshData(showProgress = true) {
+    if (showProgress) showLoading(true);
+
+    try {
+        // Clear existing data
+        currentData = null;
+
+        // Reload all data
+        await loadInitialData();
+
+        showNotification('Data refreshed successfully!', 'success');
+    } catch (error) {
+        console.error('Refresh error:', error);
+        showNotification('Error refreshing data', 'error');
+    } finally {
+        if (showProgress) showLoading(false);
+    }
+}
+
+// Enhanced error handling
+window.addEventListener('error', (e) => {
+    console.error('Global error:', e.error);
+    showNotification('An unexpected error occurred. Please refresh the page.', 'error');
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+    console.error('Unhandled promise rejection:', e.reason);
+    showNotification('Network error. Please check your connection.', 'error');
+});
+
+// Performance monitoring
+function setupPerformanceMonitoring() {
+    // Monitor page load time
+    window.addEventListener('load', () => {
+        const loadTime = performance.now();
+        console.log(`Dashboard loaded in ${loadTime.toFixed(2)}ms`);
+
+        if (loadTime > 5000) {
+            showNotification('Dashboard loaded slowly. Consider refreshing for better performance.', 'info');
+        }
+    });
+
+    // Monitor memory usage (if available)
+    if ('memory' in performance) {
+        setInterval(() => {
+            const memory = performance.memory;
+            if (memory.usedJSHeapSize > 50 * 1024 * 1024) { // 50MB threshold
+                console.warn('High memory usage detected');
+            }
+        }, 60000);
+    }
+}
+
+// Accessibility enhancements
+function setupAccessibility() {
+    // Add ARIA labels to interactive elements
+    document.querySelectorAll('.tab-button').forEach((button, index) => {
+        button.setAttribute('aria-label', `Switch to tab ${index + 1}: ${button.textContent.trim()}`);
+        button.setAttribute('role', 'tab');
+    });
+
+    // Add keyboard navigation for charts
+    document.querySelectorAll('.chart-container').forEach(container => {
+        container.setAttribute('tabindex', '0');
+        container.setAttribute('role', 'img');
+        container.setAttribute('aria-label', 'Interactive chart');
+    });
+
+    // Ensure proper focus management
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            document.body.classList.add('keyboard-navigation');
+        }
+    });
+
+    document.addEventListener('mousedown', () => {
+        document.body.classList.remove('keyboard-navigation');
+    });
+}
+
+// Initialize the application
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        // Setup all functionality
+        setupEventHandlers();
+        setupKeyboardShortcuts();
+        setupChartInteractions();
+        setupPerformanceMonitoring();
+        setupAccessibility();
+        setupRealTimeUpdates();
+
+        // Initialize chat
+        initializeChat();
+
+        // Load initial data
+        await loadInitialData();
+
+        console.log('Employee Analytics Dashboard initialized successfully');
+    } catch (error) {
+        console.error('Initialization error:', error);
+        showNotification('Error initializing dashboard. Please refresh the page.', 'error');
+    }
+});
+
+// Add CSS for keyboard navigation
+const style = document.createElement('style');
+style.textContent = `
+    .keyboard-navigation *:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+    }
+
+    .chart-container:focus {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+    }
+
+    .tab-button:focus {
+        transform: translateY(-2px);
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

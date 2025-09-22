@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Employee Data - Advanced Analytics{% endblock %}
+
+{% block head %}
+<style>
+    .upload-area {
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px dashed rgba(255, 255, 255, 0.3);
+    }
+    .upload-area:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-2px);
+    }
+    .btn-primary {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center p-4">
+    <div class="glass-effect p-12 max-w-lg w-full text-center" data-aos="fade-up">
+        <div class="mb-8">
+            <i class="fas fa-chart-line text-6xl text-white mb-4"></i>
+            <h1 class="text-4xl font-bold text-white mb-2">Advanced Employee Analytics</h1>
+            <p class="text-white text-opacity-80">Upload your HR data to unlock powerful insights</p>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data" class="space-y-6">
+            <div class="upload-area p-8 rounded-xl cursor-pointer" onclick="document.getElementById('file-upload').click()">
+                <i class="fas fa-cloud-upload-alt text-4xl text-white mb-4"></i>
+                <p class="text-white text-lg font-medium mb-2">Drop your Excel or CSV file here</p>
+                <p class="text-white text-opacity-70 text-sm">or click to browse</p>
+                <input id="file-upload" name="file" type="file" class="hidden" accept=".xlsx,.csv,.xls" required>
+            </div>
+            
+            <div class="text-left bg-white bg-opacity-10 rounded-lg p-4 text-sm text-white">
+                <h3 class="font-semibold mb-2">Supported File Formats:</h3>
+                <ul class="space-y-1">
+                    <li><i class="fas fa-file-excel text-green-400 mr-2"></i>Excel (.xlsx, .xls)</li>
+                    <li><i class="fas fa-file-csv text-blue-400 mr-2"></i>CSV (.csv)</li>
+                </ul>
+            </div>
+            
+            <button type="submit" class="btn-primary w-full text-white font-bold py-4 px-6 rounded-xl text-lg">
+                <i class="fas fa-rocket mr-2"></i>Launch Analytics Dashboard
+            </button>
+        </form>
+        
+        <div class="mt-8 pt-6 border-t border-white border-opacity-20">
+            <p class="text-white text-opacity-70 text-sm mb-4">Don't have data? Try our sample dataset</p>
+            <a href="{{ url_for('use_sample_data') }}" class="text-white hover:text-blue-200 transition-colors font-medium">
+                <i class="fas fa-database mr-2"></i>Use Sample Data
+            </a>
+        </div>
+        
+        <div class="mt-6 text-xs text-white text-opacity-60">
+            <p>Your data is processed locally and securely. Files are not stored permanently.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
